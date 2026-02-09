@@ -1,2 +1,12 @@
-# ai-investment-portfolio-manager
-AI Portfolio Manager
+---
+title: AI Investment Portfolio Manager
+emoji: 📈
+colorFrom: blue
+colorTo: purple
+sdk: docker
+pinned: false
+---
+
+AI agent for autonomous portfolio construction, management, and optimization — built step-by-step with transparency and risk focus.
+
+Initial prototype: basic inputs + simulation placeholder.
