@@ -6,19 +6,33 @@ import pandas as pd
 st.title("AI Investment Portfolio Manager")
 
 with st.sidebar:
-    initial_capital = st.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
-    risk_level = st.selectbox("Risk Level", options=["Low", "Medium", "High"])
+    initial_capital = st.number_input(
+        "Initial Capital ($)", 
+        min_value=1000.0, 
+        value=10000.0, 
+        step=1000.0
+    )
+    risk_level = st.selectbox(
+        "Risk Level", 
+        options=["Low", "Medium", "High"]
+    )
 
 if st.button("Run Simulation"):
     st.success("Fetching real-time market data via Polygon API...")
 
+    # Load API key from Hugging Face secrets / environment variables
     api_key = os.getenv("POLYGON_API_KEY")
     if not api_key:
-        st.error("POLYGON_API_KEY environment variable not found. Add it in Settings → Variables and secrets → Secrets (private).")
+        st.error(
+            "POLYGON_API_KEY not found. "
+            "Please add it in Settings → Variables and secrets → Secrets (private). "
+            "Name must be exactly POLYGON_API_KEY (case-sensitive)."
+        )
         st.stop()
 
     client = RESTClient(api_key)
 
+    # Sample diversified tickers (equity, broad market, bonds, growth)
     tickers = ["SPY", "VTI", "BND", "QQQ"]
     data = []
 
@@ -39,6 +53,7 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Polygon API)")
         st.dataframe(df, use_container_width=True)
 
+        # Simple risk-based allocation (placeholder – will improve with MPT later)
         allocations = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -52,6 +67,10 @@ if st.button("Run Simulation"):
         st.subheader(f"Initial Allocation Suggestion ({risk_level} Risk)")
         st.dataframe(alloc_df, use_container_width=True)
 
-        st.info("This is a simple starting allocation. Future versions will use quantitative models (e.g., Modern Portfolio Theory) for optimal risk-adjusted returns and diversification.")
+        st.info(
+            "This is a simple starting allocation based on risk level. "
+            "Future versions will use quantitative models (e.g., Modern Portfolio Theory) "
+            "for optimal risk-adjusted returns and diversification."
+        )
     else:
-        st.error("No data fetched. Check API key validity and internet connection.")
+        st.error("No market data fetched. Check API key validity and internet connection.")
