@@ -92,22 +92,39 @@ if st.button("Run Simulation"):
         st.subheader("Allocation Breakdown")
         st.pyplot(fig)
 
-        # Historical 1-year price trends chart
-        st.subheader("1-Year Historical Price Trends")
+        # 1-Year Historical Price Trends (Normalized)
+        st.subheader("1-Year Historical Price Trends (Normalized)")
         fig2, ax2 = plt.subplots(figsize=(10, 6))
         for ticker in tickers:
             try:
                 hist = yf.download(ticker, period="1y")['Close']
-                ax2.plot(hist.index, hist, label=ticker)
+                if not hist.empty:
+                    normalized = 100 * (hist / hist.iloc[0])  # Normalize to start at 100
+                    ax2.plot(normalized.index, normalized, label=ticker)
             except Exception as e:
                 st.warning(f"Could not load history for {ticker}: {str(e)}")
-        ax2.set_title("1-Year Price History")
+
+        # Benchmark overlay (S&P 500 as dashed line)
+        try:
+            benchmark = yf.download("SPY", period="1y")['Close']
+            if not benchmark.empty:
+                normalized_bench = 100 * (benchmark / benchmark.iloc[0])
+                ax2.plot(normalized_bench.index, normalized_bench, label="S&P 500 (Benchmark)", color="black", linestyle="--")
+        except Exception as e:
+            st.warning(f"Could not load benchmark (S&P 500): {str(e)}")
+
+        ax2.set_title("1-Year Price History (Normalized to 100)")
         ax2.set_xlabel("Date")
-        ax2.set_ylabel("Price ($)")
+        ax2.set_ylabel("Normalized Price (Start = 100)")
         ax2.legend()
         ax2.grid(True)
         plt.tight_layout()
         st.pyplot(fig2)
+
+        st.caption(
+            "This chart shows relative performance over the past year, normalized to start at 100 for easy comparison. "
+            "It helps visualize trends and volatility to inform the momentum tilt in your allocation suggestion."
+        )
 
         st.info(
             "This allocation includes a simple momentum tilt (favoring recent performers). "
