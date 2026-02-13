@@ -1,59 +1,37 @@
 import streamlit as st
-import os
-from polygon import RESTClient
+import yfinance as yf
 import pandas as pd
 
 st.title("AI Investment Portfolio Manager")
 
 with st.sidebar:
-    initial_capital = st.number_input(
-        "Initial Capital ($)", 
-        min_value=1000.0, 
-        value=10000.0, 
-        step=1000.0
-    )
-    risk_level = st.selectbox(
-        "Risk Level", 
-        options=["Low", "Medium", "High"]
-    )
+    initial_capital = st.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
+    risk_level = st.selectbox("Risk Level", options=["Low", "Medium", "High"])
 
 if st.button("Run Simulation"):
-    st.success("Fetching real-time market data via Polygon API...")
+    st.success("Fetching market data via Yahoo Finance...")
 
-    # Load API key from Hugging Face secrets / environment variables
-    api_key = os.getenv("POLYGON_API_KEY")
-    if not api_key:
-        st.error(
-            "POLYGON_API_KEY not found. "
-            "Please add it in Settings → Variables and secrets → Secrets (private). "
-            "Name must be exactly POLYGON_API_KEY (case-sensitive)."
-        )
-        st.stop()
-
-    client = RESTClient(api_key)
-
-    # Sample diversified tickers (equity, broad market, bonds, growth)
-    tickers = ["SPY", "VTI", "BND", "QQQ"]
+    tickers = ["SPY", "VTI", "BND", "QQQ"]  # diversified samples
     data = []
 
     for ticker in tickers:
         try:
-            quote = client.get_last_trade(ticker)
-            if quote:
-                data.append({
-                    "Ticker": ticker,
-                    "Last Price": f"${quote.price:.2f}",
-                    "Timestamp": pd.to_datetime(quote.timestamp, unit='ms').strftime('%Y-%m-%d %H:%M:%S')
-                })
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            price = info.get('regularMarketPrice') or info.get('currentPrice') or stock.history(period="1d")['Close'].iloc[-1]
+            data.append({
+                "Ticker": ticker,
+                "Last Price": f"${price:.2f}",
+                "Timestamp": pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
+            })
         except Exception as e:
             st.warning(f"Could not fetch {ticker}: {str(e)}")
 
     if data:
         df = pd.DataFrame(data)
-        st.subheader("Latest Market Prices (Polygon API)")
+        st.subheader("Latest Market Prices (Yahoo Finance)")
         st.dataframe(df, use_container_width=True)
 
-        # Simple risk-based allocation (placeholder – will improve with MPT later)
         allocations = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -67,10 +45,6 @@ if st.button("Run Simulation"):
         st.subheader(f"Initial Allocation Suggestion ({risk_level} Risk)")
         st.dataframe(alloc_df, use_container_width=True)
 
-        st.info(
-            "This is a simple starting allocation based on risk level. "
-            "Future versions will use quantitative models (e.g., Modern Portfolio Theory) "
-            "for optimal risk-adjusted returns and diversification."
-        )
+        st.info("This is a simple starting allocation based on risk tolerance. Future versions will incorporate modern portfolio theory for optimal risk-adjusted returns, diversification, and ethical considerations like ESG factors. This is not financial advice; consult a professional.")
     else:
-        st.error("No market data fetched. Check API key validity and internet connection.")
+        st.error("No market data fetched. Check internet connection.")
