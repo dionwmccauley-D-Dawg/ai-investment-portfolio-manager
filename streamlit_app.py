@@ -101,7 +101,7 @@ if st.button("Run Simulation"):
                 ax2.plot(hist.index, hist, label=ticker)
             except Exception as e:
                 st.warning(f"Could not load history for {ticker}: {str(e)}")
-        ax2.set_title("1-Year Price History (Normalized Scale)")
+        ax2.set_title("1-Year Price History")
         ax2.set_xlabel("Date")
         ax2.set_ylabel("Price ($)")
         ax2.legend()
