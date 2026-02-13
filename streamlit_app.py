@@ -92,7 +92,7 @@ if st.button("Run Simulation"):
         st.subheader("Allocation Breakdown")
         st.pyplot(fig)
 
-        # New: 1-year historical price trends chart
+        # Historical 1-year price trends chart
         st.subheader("1-Year Historical Price Trends")
         fig2, ax2 = plt.subplots(figsize=(10, 6))
         for ticker in tickers:
