@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 from polygon import RESTClient
 import pandas as pd
 
@@ -11,16 +12,13 @@ with st.sidebar:
 if st.button("Run Simulation"):
     st.success("Fetching real-time market data via Polygon API...")
 
-    # Securely load API key from HF secrets (works automatically in Spaces)
-    try:
-        api_key = st.secrets["POLYGON_API_KEY"]
-    except:
-        st.error("POLYGON_API_KEY secret not found. Add it in Settings → Variables and secrets → Secrets.")
+    api_key = os.getenv("POLYGON_API_KEY")
+    if not api_key:
+        st.error("POLYGON_API_KEY environment variable not found. Add it in Settings → Variables and secrets → Secrets (private).")
         st.stop()
 
     client = RESTClient(api_key)
 
-    # Sample diversified tickers (equity, broad market, bonds, growth)
     tickers = ["SPY", "VTI", "BND", "QQQ"]
     data = []
 
@@ -41,7 +39,6 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Polygon API)")
         st.dataframe(df, use_container_width=True)
 
-        # Basic risk-based allocation (placeholder – will use MPT later)
         allocations = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
