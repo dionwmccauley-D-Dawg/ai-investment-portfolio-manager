@@ -92,7 +92,7 @@ if st.button("Run Simulation"):
         st.subheader("Allocation Breakdown")
         st.pyplot(fig)
 
-        # New: 1-year price history chart
+        # New: 1-year historical price trends chart
         st.subheader("1-Year Historical Price Trends")
         fig2, ax2 = plt.subplots(figsize=(10, 6))
         for ticker in tickers:
@@ -101,7 +101,7 @@ if st.button("Run Simulation"):
                 ax2.plot(hist.index, hist, label=ticker)
             except Exception as e:
                 st.warning(f"Could not load history for {ticker}: {str(e)}")
-        ax2.set_title("1-Year Price History")
+        ax2.set_title("1-Year Price History (Normalized Scale)")
         ax2.set_xlabel("Date")
         ax2.set_ylabel("Price ($)")
         ax2.legend()
