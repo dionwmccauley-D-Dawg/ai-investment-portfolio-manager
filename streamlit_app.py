@@ -24,7 +24,6 @@ with st.sidebar:
 if st.button("Run Simulation"):
     st.success("Fetching market data via Yahoo Finance...")
 
-    # Sample diversified tickers
     tickers = ["SPY", "VTI", "BND", "QQQ"]
     data = []
 
@@ -34,7 +33,6 @@ if st.button("Run Simulation"):
             info = stock.info
             price = info.get('regularMarketPrice') or info.get('currentPrice') or stock.history(period="1d")['Close'].iloc[-1]
 
-            # 1-month momentum
             hist = stock.history(period="1mo")
             momentum = 0.0
             if not hist.empty and len(hist) > 1:
@@ -54,7 +52,6 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Yahoo Finance)")
         st.dataframe(df, use_container_width=True)
 
-        # Base allocations by risk level
         base_allocs = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -63,7 +60,6 @@ if st.button("Run Simulation"):
 
         alloc = base_allocs[risk_level].copy()
 
-        # Simple momentum tilt
         total_momentum = 0
         momentum_scores = {}
         for t in alloc:
@@ -71,16 +67,15 @@ if st.button("Run Simulation"):
                 mom_str = df[df['Ticker'] == t]['1-Mo Momentum (%)'].iloc[0]
                 mom = float(mom_str.strip('%'))
                 momentum_scores[t] = mom
-                total_momentum += abs(mom)  # use absolute to avoid division by zero
+                total_momentum += abs(mom)
 
         if total_momentum > 0:
             for t in alloc:
                 if alloc[t] > 0 and t in momentum_scores:
                     mom = momentum_scores[t]
-                    tilt = (mom / total_momentum) * 20  # stronger tilt: up to ±20% adjustment
+                    tilt = (mom / total_momentum) * 20
                     alloc[t] += tilt if mom > 0 else -tilt
 
-        # Normalize to 100%
         total_pct = sum(alloc.values())
         alloc = {k: (v / total_pct * 100) if total_pct > 0 else 0 for k, v in alloc.items()}
 
@@ -91,12 +86,28 @@ if st.button("Run Simulation"):
         st.subheader(f"Initial Allocation Suggestion ({risk_level} Risk)")
         st.dataframe(alloc_df, use_container_width=True)
 
-        # Pie chart
         fig, ax = plt.subplots()
         ax.pie(alloc.values(), labels=alloc.keys(), autopct='%1.0f%%', startangle=90, colors=['#66b3ff','#99ff99','#ff9999','#ffcc99'])
         ax.axis('equal')
         st.subheader("Allocation Breakdown")
         st.pyplot(fig)
+
+        # New: 1-year price history chart
+        st.subheader("1-Year Historical Price Trends")
+        fig2, ax2 = plt.subplots(figsize=(10, 6))
+        for ticker in tickers:
+            try:
+                hist = yf.download(ticker, period="1y")['Close']
+                ax2.plot(hist.index, hist, label=ticker)
+            except Exception as e:
+                st.warning(f"Could not load history for {ticker}: {str(e)}")
+        ax2.set_title("1-Year Price History")
+        ax2.set_xlabel("Date")
+        ax2.set_ylabel("Price ($)")
+        ax2.legend()
+        ax2.grid(True)
+        plt.tight_layout()
+        st.pyplot(fig2)
 
         st.info(
             "This allocation includes a simple momentum tilt (favoring recent performers). "
