@@ -9,13 +9,18 @@ with st.sidebar:
     risk_level = st.selectbox("Risk Level", options=["Low", "Medium", "High"])
 
 if st.button("Run Simulation"):
-    st.success("Fetching real market data via Polygon API...")
+    st.success("Fetching real-time market data via Polygon API...")
 
-    # Polygon API key (use secret in HF; hardcode temporarily for local test only)
-    api_key = "YOUR_POLYGON_API_KEY_HERE"  # REPLACE WITH YOUR KEY FOR LOCAL TEST
+    # Securely load API key from HF secrets (works automatically in Spaces)
+    try:
+        api_key = st.secrets["POLYGON_API_KEY"]
+    except:
+        st.error("POLYGON_API_KEY secret not found. Add it in Settings → Variables and secrets → Secrets.")
+        st.stop()
+
     client = RESTClient(api_key)
 
-    # Sample diversified tickers (equity, broad market, bonds)
+    # Sample diversified tickers (equity, broad market, bonds, growth)
     tickers = ["SPY", "VTI", "BND", "QQQ"]
     data = []
 
@@ -36,7 +41,7 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Polygon API)")
         st.dataframe(df, use_container_width=True)
 
-        # Simple risk-based allocation (placeholder – will optimize later)
+        # Basic risk-based allocation (placeholder – will use MPT later)
         allocations = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -50,6 +55,6 @@ if st.button("Run Simulation"):
         st.subheader(f"Initial Allocation Suggestion ({risk_level} Risk)")
         st.dataframe(alloc_df, use_container_width=True)
 
-        st.info("This is a basic starting allocation. Future updates will use quantitative models (e.g., Modern Portfolio Theory) for optimal risk-adjusted returns and diversification.")
+        st.info("This is a simple starting allocation. Future versions will use quantitative models (e.g., Modern Portfolio Theory) for optimal risk-adjusted returns and diversification.")
     else:
-        st.error("No data fetched. Check API key and internet connection.")
+        st.error("No data fetched. Check API key validity and internet connection.")
