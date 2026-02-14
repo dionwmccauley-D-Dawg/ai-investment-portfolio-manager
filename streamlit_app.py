@@ -93,3 +93,4 @@ if st.sidebar.button("Run"):
         st.info("ESG ETFs enabled")
     st.warning("Simulation only. Not financial advice.")
     st.caption("yfinance data")
+# ARIMA forecast table live - rebuild trigger 2026-02-14
