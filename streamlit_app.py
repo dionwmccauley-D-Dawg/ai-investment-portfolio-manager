@@ -155,3 +155,4 @@ if run_simulation:
 # Debug: ARIMA forecast sync - 2026-02-14
 
 # ARIMA forecast deployed - force sync 2026-02-14
+# Phase 2 forecast table - confirmed sync 2026-02-14
