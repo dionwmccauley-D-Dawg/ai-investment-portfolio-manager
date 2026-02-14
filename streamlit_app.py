@@ -69,7 +69,7 @@ if run_simulation:
     }).round(4)
     st.table(prices_df)
 
-    # Fetch long historical data for forecasting and prep for optimization
+    # Fetch long historical data for forecasting
     end_date = datetime.now()
     start_date_long = end_date - timedelta(days=5*365 + 100)  # ~5 years + buffer
     hist_data_long = yf.download(tickers, start=start_date_long, end=end_date)['Close']
@@ -79,7 +79,7 @@ if run_simulation:
     expected_returns = {}
     for ticker in tickers:
         expected_returns[ticker] = forecast_expected_return(hist_data_long[ticker])
-    
+
     forecast_df = pd.DataFrame({
         'Ticker': tickers,
         'Forecasted Expected Return (%)': [f"{r*100:.2f}" if not np.isnan(r) else "N/A" for r in expected_returns.values()]
@@ -152,9 +152,3 @@ if run_simulation:
     st.caption("Powered by yfinance API.")
 
 # End of script
-# Debug: ARIMA forecast sync - 2026-02-14
-
-# ARIMA forecast deployed - force sync 2026-02-14
-# Phase 2 forecast table - confirmed sync 2026-02-14
-
-# ARIMA FORECAST TABLE IS NOW LIVE - SYNC CONFIRM 2026-02-14
