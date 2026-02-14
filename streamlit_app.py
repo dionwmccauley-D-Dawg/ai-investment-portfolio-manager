@@ -2,197 +2,153 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime
+import numpy as np
+from datetime import datetime, timedelta
+from statsmodels.tsa.arima.model import ARIMA
+import warnings
+warnings.filterwarnings("ignore")  # Suppress ARIMA convergence warnings
 
+# Title
 st.title("AI Investment Portfolio Manager")
 
-with st.sidebar:
-    st.subheader("Portfolio Inputs")
-    initial_capital = st.number_input(
-        "Initial Capital ($)", 
-        min_value=1000.0, 
-        value=10000.0, 
-        step=1000.0,
-        help="The amount you plan to invest."
-    )
-    risk_level = st.selectbox(
-        "Risk Level", 
-        options=["Low", "Medium", "High"],
-        help="Low: Conservative (more bonds), High: Aggressive (more growth)"
-    )
-    prefer_esg = st.checkbox(
-        "Prefer ESG tickers", 
-        value=False,
-        help="If checked, allocation will prioritize ESG-focused ETFs (e.g., ESGU, SUSL) where possible."
-    )
+# Sidebar inputs
+st.sidebar.header("User Inputs")
+initial_capital = st.sidebar.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
+risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
+esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
 
-if st.button("Run Simulation"):
-    st.success("Fetching market data via Yahoo Finance...")
+# Determine tickers based on ESG preference
+if esg_preference:
+    tickers = ['ESGU', 'SUSL', 'BND', 'QQQ']
+    esg_note = "Using ESG-focused ETFs: ESGU (Broad US ESG), SUSL (US Large Cap ESG), BND (Bonds), QQQ (Tech/Growth)."
+else:
+    tickers = ['SPY', 'VTI', 'BND', 'QQQ']
+    esg_note = ""
 
-    # Dynamic tickers based on ESG preference
-    if prefer_esg:
-        tickers = ["ESGU", "SUSL", "BND", "QQQ"]
-        st.info("ESG preference enabled: using ESGU and SUSL for equity exposure.")
+# Benchmark ticker
+benchmark_ticker = 'SPY'
+
+# Risk constraints function (prep for future optimization)
+def get_risk_constraints(risk_level):
+    if risk_level == "Low":
+        return 0.10
+    elif risk_level == "Medium":
+        return 0.15
     else:
-        tickers = ["SPY", "VTI", "BND", "QQQ"]
+        return 0.20
 
-    data = []
+# Simple ARIMA forecast function for expected annualized return
+def forecast_expected_return(price_series, forecast_days=30):
+    try:
+        returns = price_series.pct_change().dropna()
+        if len(returns) < 60:  # Need reasonable history
+            return np.nan
+        model = ARIMA(returns[-252:], order=(5,1,0))  # ARIMA(5,1,0) - common starting point
+        model_fit = model.fit()
+        forecast = model_fit.forecast(steps=forecast_days)
+        mean_daily = forecast.mean()
+        annualized = (1 + mean_daily) ** 252 - 1  # Annualize assuming 252 trading days
+        return annualized
+    except Exception:
+        return np.nan
 
+# Run simulation button
+run_simulation = st.sidebar.button("Run Simulation")
+
+if run_simulation:
+    # Fetch current prices and 1-month momentum
+    st.header("Current Market Prices")
+    price_data = yf.download(tickers, period='1mo')['Close']
+    current_prices = price_data.iloc[-1]
+    momentum = ((price_data.iloc[-1] / price_data.iloc[0]) - 1) * 100
+
+    prices_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Current Price ($)': current_prices.values,
+        '1-Mo Momentum (%)': momentum.values
+    }).round(4)
+    st.table(prices_df)
+
+    # Fetch long historical data for forecasting and prep for optimization
+    end_date = datetime.now()
+    start_date_long = end_date - timedelta(days=5*365 + 100)  # ~5 years + buffer
+    hist_data_long = yf.download(tickers, start=start_date_long, end=end_date)['Close']
+
+    # Forecast expected returns
+    st.header("Forecasted Annualized Expected Returns (Next ~1 Month Horizon)")
+    expected_returns = {}
     for ticker in tickers:
-        try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
-            price = info.get('regularMarketPrice') or info.get('currentPrice') or stock.history(period="1d")['Close'].iloc[-1]
+        expected_returns[ticker] = forecast_expected_return(hist_data_long[ticker])
+    
+    forecast_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Forecasted Expected Return (%)': [f"{r*100:.2f}" if not np.isnan(r) else "N/A" for r in expected_returns.values()]
+    })
+    st.table(forecast_df)
+    st.caption("Forecasts based on ARIMA time-series model using historical daily returns. These are estimates only; actual returns may vary significantly. Past performance is not indicative of future results.")
 
-            hist = stock.history(period="1mo")
-            momentum = 0.0
-            if not hist.empty and len(hist) > 1:
-                momentum = (hist['Close'].iloc[-1] - hist['Close'].iloc[0]) / hist['Close'].iloc[0] * 100
-
-            data.append({
-                "Ticker": ticker,
-                "Last Price": f"${price:.2f}",
-                "1-Mo Momentum (%)": f"{momentum:.1f}%",
-                "Timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            })
-        except Exception as e:
-            st.warning(f"Could not fetch {ticker}: {str(e)}")
-
-    if data:
-        df = pd.DataFrame(data)
-        st.subheader("Latest Market Prices (Yahoo Finance)")
-        st.dataframe(df, use_container_width=True)
-
-        base_allocs = {
-            "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
-            "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
-            "High": {"QQQ": 40, "SPY": 35, "VTI": 25, "BND": 0}
-        }
-
-        alloc = base_allocs[risk_level].copy()
-
-        if prefer_esg:
-            if "SPY" in alloc:
-                alloc["ESGU"] = alloc.pop("SPY")
-            if "VTI" in alloc:
-                alloc["SUSL"] = alloc.pop("VTI")
-
-        total_momentum = 0
-        momentum_scores = {}
-        for t in alloc:
-            if alloc[t] > 0 and t in df['Ticker'].values:
-                mom_str = df[df['Ticker'] == t]['1-Mo Momentum (%)'].iloc[0]
-                mom = float(mom_str.strip('%'))
-                momentum_scores[t] = mom
-                total_momentum += abs(mom)
-
-        if total_momentum > 0:
-            for t in alloc:
-                if alloc[t] > 0 and t in momentum_scores:
-                    mom = momentum_scores[t]
-                    tilt = (mom / total_momentum) * 20
-                    alloc[t] += tilt if mom > 0 else -tilt
-
-        total_pct = sum(alloc.values())
-        alloc = {k: (v / total_pct * 100) if total_pct > 0 else 0 for k, v in alloc.items()}
-
-        alloc_df = pd.DataFrame(list(alloc.items()), columns=["Asset", "Suggested %"])
-        alloc_df["Suggested %"] = alloc_df["Suggested %"].apply(lambda x: f"{x:.1f}%")
-        alloc_df["Estimated Value"] = (alloc_df["Suggested %"].str.strip('%').astype(float) / 100 * initial_capital).apply(lambda x: f"${x:,.2f}")
-
-        st.subheader(f"Initial Allocation Suggestion ({risk_level} Risk)")
-        st.dataframe(alloc_df, use_container_width=True)
-
-        fig, ax = plt.subplots()
-        ax.pie(alloc.values(), labels=alloc.keys(), autopct='%1.0f%%', startangle=90, colors=['#66b3ff','#99ff99','#ff9999','#ffcc99'])
-        ax.axis('equal')
-        st.subheader("Allocation Breakdown")
-        st.pyplot(fig)
-
-        # 1-Year Historical Price Trends (Normalized)
-        st.subheader("1-Year Historical Price Trends (Normalized)")
-        fig2, ax2 = plt.subplots(figsize=(10, 6))
-        for ticker in tickers:
-            try:
-                hist = yf.download(ticker, period="1y")['Close']
-                if not hist.empty:
-                    normalized = 100 * (hist / hist.iloc[0])
-                    ax2.plot(normalized.index, normalized, label=ticker)
-            except Exception as e:
-                st.warning(f"Could not load history for {ticker}: {str(e)}")
-
-        # Benchmark overlay (S&P 500 as dashed line)
-        try:
-            benchmark = yf.download("SPY", period="1y")['Close']
-            if not benchmark.empty:
-                normalized_bench = 100 * (benchmark / benchmark.iloc[0])
-                ax2.plot(normalized_bench.index, normalized_bench, label="S&P 500 (Benchmark)", color="black", linestyle="--")
-        except Exception as e:
-            st.warning(f"Could not load benchmark (S&P 500): {str(e)}")
-
-        ax2.set_title("1-Year Price History (Normalized to 100)")
-        ax2.set_xlabel("Date")
-        ax2.set_ylabel("Normalized Price (Start = 100)")
-        ax2.legend()
-        ax2.grid(True)
-        plt.tight_layout()
-        st.pyplot(fig2)
-
-        st.caption(
-            "This chart shows relative performance over the past year, normalized to start at 100 for easy comparison. "
-            "It helps visualize trends and volatility to inform the momentum tilt in your allocation suggestion."
-        )
-
-        st.caption("Note: Prices are delayed (Yahoo Finance data) and not real-time. For real-time data, consider premium sources. This is for illustrative purposes only.")
-
-        # Benchmark comparison metrics (1-year total return)
-        st.subheader("Benchmark Comparison (1-Year Total Return)")
-        benchmark_return = 0.0
-        alloc_return = 0.0
-
-        try:
-            spy_hist = yf.download("SPY", period="1y")['Close']
-            if not spy_hist.empty and len(spy_hist) > 1:
-                benchmark_return = float((spy_hist.iloc[-1] - spy_hist.iloc[0]) / spy_hist.iloc[0] * 100)
-        except Exception as e:
-            st.warning(f"Could not calculate S&P 500 return: {str(e)}")
-
-        # Approximate allocation return using weighted momentum
-        weighted_return = 0.0
-        total_weight = 0.0
-        for asset, pct in alloc.items():
-            if asset in momentum_scores:
-                weighted_return += (pct / 100) * momentum_scores[asset]
-                total_weight += pct / 100
-
-        if total_weight > 0:
-            alloc_return = weighted_return / total_weight
-
-        comparison_df = pd.DataFrame({
-            "Metric": ["Suggested Allocation", "S&P 500 Benchmark"],
-            "1-Year Return (%)": [f"{alloc_return:.1f}% (approx)", f"{benchmark_return:.1f}%"],
-            "Difference": [f"{alloc_return - benchmark_return:.1f}%", "–"]
-        })
-
-        st.dataframe(comparison_df, use_container_width=True)
-
-        st.caption(
-            "Allocation return is approximated from recent momentum and current prices. "
-            "Actual returns vary. Past performance is no guarantee of future results. "
-            "This is not investment advice — consult a certified financial advisor."
-        )
-
-        if prefer_esg:
-            st.info(
-                "ESG tickers (ESGU, SUSL) prioritize environmental, social, and governance factors but may have different risk/return profiles compared to traditional ETFs."
-            )
-
-        st.info(
-            "This allocation includes a simple momentum tilt (favoring recent performers). "
-            "It is a starting suggestion only, not financial advice. "
-            "Future versions will use modern portfolio theory for optimal risk-adjusted returns, "
-            "diversification, and ethical considerations like ESG factors. "
-            "Always consult a certified financial advisor."
-        )
+    # Base weights based on risk level
+    if risk_level == "Low":
+        base_weights = [0.2, 0.2, 0.5, 0.1]
+    elif risk_level == "Medium":
+        base_weights = [0.3, 0.3, 0.3, 0.1]
     else:
-        st.error("No market data fetched. Check internet connection.")
+        base_weights = [0.3, 0.3, 0.1, 0.3]
+
+    # Simple momentum tilt (placeholder - to be replaced with optimization)
+    rel_momentum = momentum / momentum.sum()
+    tilted_weights = [w * (1 + r / 100) for w, r in zip(base_weights, rel_momentum)]
+    total = sum(tilted_weights)
+    allocation_percent = [w / total * 100 for w in tilted_weights]
+    allocation_dollars = [p / 100 * initial_capital for p in allocation_percent]
+
+    # Allocation table
+    st.header("Recommended Portfolio Allocation")
+    allocation_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Allocation (%)': [round(p, 4) for p in allocation_percent],
+        'Estimated Value ($)': [round(d, 2) for d in allocation_dollars]
+    })
+    st.table(allocation_df)
+
+    # Pie chart
+    fig_pie, ax_pie = plt.subplots()
+    ax_pie.pie(allocation_percent, labels=tickers, autopct='%1.1f%%', startangle=90)
+    ax_pie.axis('equal')
+    st.pyplot(fig_pie)
+
+    # Fetch 1-year data for normalized chart and returns
+    start_date_1y = end_date - timedelta(days=365)
+    hist_data = yf.download(tickers + [benchmark_ticker], start=start_date_1y, end=end_date)['Close']
+    normalized = (hist_data / hist_data.iloc[0]) * 100
+    one_year_returns = ((hist_data.iloc[-1] / hist_data.iloc[0]) - 1) * 100
+
+    portfolio_return = sum(r * (w / 100) for r, w in zip(one_year_returns[tickers], allocation_percent))
+    benchmark_return = one_year_returns[benchmark_ticker]
+
+    # Historical normalized chart
+    st.header("1-Year Historical Price Trends (Normalized to 100)")
+    fig_hist, ax_hist = plt.subplots(figsize=(10, 6))
+    for ticker in tickers:
+        ax_hist.plot(normalized.index, normalized[ticker], label=ticker)
+    ax_hist.plot(normalized.index, normalized[benchmark_ticker], label='S&P 500 (Benchmark)', linestyle='--', color='black')
+    ax_hist.set_xlabel("Date")
+    ax_hist.set_ylabel("Normalized Price")
+    ax_hist.legend()
+    st.pyplot(fig_hist)
+
+    # Benchmark comparison
+    st.header("Benchmark Comparison (1-Year Return %)")
+    benchmark_df = pd.DataFrame({
+        'Metric': ['Portfolio Return', 'S&P 500 Return'],
+        'Value (%)': [round(portfolio_return, 4), round(benchmark_return, 4)]
+    })
+    st.table(benchmark_df)
+
+    # Notes and disclaimers
+    if esg_note:
+        st.info(esg_note)
+    st.warning("Data is delayed and for informational purposes only. Forecasts are model-based estimates and not guarantees. This is not financial advice. Consult a professional advisor.")
+    st.caption("Powered by yfinance API.")
+
+# End of script
