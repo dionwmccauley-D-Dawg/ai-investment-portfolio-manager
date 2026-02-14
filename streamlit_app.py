@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 
 st.title("AI Investment Portfolio Manager")
 
@@ -20,11 +20,22 @@ with st.sidebar:
         options=["Low", "Medium", "High"],
         help="Low: Conservative (more bonds), High: Aggressive (more growth)"
     )
+    prefer_esg = st.checkbox(
+        "Prefer ESG tickers", 
+        value=False,
+        help="If checked, allocation will prioritize ESG-focused ETFs (e.g., ESGU, SUSL) where possible."
+    )
 
 if st.button("Run Simulation"):
     st.success("Fetching market data via Yahoo Finance...")
 
-    tickers = ["SPY", "VTI", "BND", "QQQ"]
+    # Dynamic tickers based on ESG preference
+    if prefer_esg:
+        tickers = ["ESGU", "SUSL", "BND", "QQQ"]  # ESG US stocks, ESG S&P 500, bonds, growth
+        st.info("ESG preference enabled: using ESGU and SUSL for equity exposure.")
+    else:
+        tickers = ["SPY", "VTI", "BND", "QQQ"]
+
     data = []
 
     for ticker in tickers:
@@ -52,6 +63,7 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Yahoo Finance)")
         st.dataframe(df, use_container_width=True)
 
+        # Base allocations (adjusted for ESG if toggled)
         base_allocs = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -59,6 +71,13 @@ if st.button("Run Simulation"):
         }
 
         alloc = base_allocs[risk_level].copy()
+
+        if prefer_esg:
+            # Replace SPY with ESGU, VTI with SUSL where applicable
+            if "SPY" in alloc:
+                alloc["ESGU"] = alloc.pop("SPY")
+            if "VTI" in alloc:
+                alloc["SUSL"] = alloc.pop("VTI")
 
         total_momentum = 0
         momentum_scores = {}
@@ -128,7 +147,7 @@ if st.button("Run Simulation"):
 
         st.caption("Note: Prices are delayed (Yahoo Finance data) and not real-time. For real-time data, consider premium sources. This is for illustrative purposes only.")
 
-        # Benchmark comparison metrics (1-year total return) – fixed formatting
+        # Benchmark comparison metrics (1-year total return)
         st.subheader("Benchmark Comparison (1-Year Total Return)")
         benchmark_return = 0.0
         alloc_return = 0.0
