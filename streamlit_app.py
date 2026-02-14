@@ -11,85 +11,115 @@ warnings.filterwarnings("ignore")
 
 st.title("AI Investment Portfolio Manager")
 
-st.sidebar.header("Inputs")
-capital = st.sidebar.number_input("Capital ($)", 1000.0, value=10000.0, step=1000.0)
-risk = st.sidebar.selectbox("Risk", ["Low", "Medium", "High"])
-esg = st.sidebar.checkbox("ESG Preference")
+st.sidebar.header("User Inputs")
+initial_capital = st.sidebar.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
+risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
+esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
 
-tickers = ['ESGU', 'SUSL', 'BND', 'QQQ'] if esg else ['SPY', 'VTI', 'BND', 'QQQ']
+if esg_preference:
+    tickers = ['ESGU', 'SUSL', 'BND', 'QQQ']
+    esg_note = "Using ESG-focused ETFs: ESGU (Broad US ESG), SUSL (US Large Cap ESG), BND (Bonds), QQQ (Tech/Growth)."
+else:
+    tickers = ['SPY', 'VTI', 'BND', 'QQQ']
+    esg_note = ""
 
-def forecast(prices, days=30):
+benchmark_ticker = 'SPY'
+
+def forecast_expected_return(price_series, forecast_days=30):
     try:
-        rets = prices.pct_change().dropna()
-        if len(rets) < 60:
+        returns = price_series.pct_change().dropna()
+        if len(returns) < 60:
             return np.nan
-        m = ARIMA(rets[-252:], order=(5,1,0))
-        fit = m.fit()
-        fc = fit.forecast(steps=days)
-        return (1 + fc.mean()) ** 252 - 1
-    except:
+        model = ARIMA(returns[-252:], order=(5,1,0))
+        model_fit = model.fit()
+        forecast = model_fit.forecast(steps=forecast_days)
+        mean_daily = forecast.mean()
+        annualized = (1 + mean_daily) ** 252 - 1
+        return annualized
+    except Exception:
         return np.nan
 
-if st.sidebar.button("Run"):
-    st.write("Loading...")
+if st.sidebar.button("Run Simulation"):
+    st.header("Current Market Prices")
+    price_data = yf.download(tickers, period='1mo')['Close']
+    current_prices = price_data.iloc[-1]
+    momentum = ((price_data.iloc[-1] / price_data.iloc[0]) - 1) * 100
 
-    p = yf.download(tickers, period="1mo")['Close']
-    prices = p.iloc[-1]
-    mom = ((p.iloc[-1] / p.iloc[0]) - 1) * 100
+    prices_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Current Price ($)': current_prices.values,
+        '1-Mo Momentum (%)': momentum.values
+    }).round(4)
+    st.table(prices_df)
 
-    st.header("Prices & Momentum")
-    df = pd.DataFrame({"Ticker": tickers, "Price": prices.round(2), "1M %": mom.round(2)})
-    st.table(df)
+    end_date = datetime.now()
+    start_date_long = end_date - timedelta(days=5*365 + 100)
+    hist_data_long = yf.download(tickers, start=start_date_long, end=end_date)['Close']
 
-    end = datetime.now()
-    h = yf.download(tickers, start=end - timedelta(days=5*365 + 100))['Close']
+    st.header("Forecasted Annualized Expected Returns (Next ~1 Month Horizon)")
+    expected_returns = {}
+    for ticker in tickers:
+        expected_returns[ticker] = forecast_expected_return(hist_data_long[ticker])
 
-    st.header("Forecasted Annual Returns (~1 Month)")
-    fc = {t: forecast(h[t]) for t in tickers}
-    fc_df = pd.DataFrame({
-        "Ticker": tickers,
-        "Forecast %": [f"{v*100:.2f}" if not np.isnan(v) else "N/A" for v in fc.values()]
+    forecast_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Forecasted Expected Return (%)': [f"{r*100:.2f}" if not np.isnan(r) else "N/A" for r in expected_returns.values()]
     })
-    st.table(fc_df)
-    st.caption("ARIMA estimate. Actual returns vary significantly.")
+    st.table(forecast_df)
+    st.caption("Forecasts based on ARIMA time-series model using historical daily returns. These are estimates only; actual returns may vary significantly. Past performance is not indicative of future results.")
 
-    if risk == "Low":
-        base = [0.2, 0.2, 0.5, 0.1]
-    elif risk == "Medium":
-        base = [0.3, 0.3, 0.3, 0.1]
+    if risk_level == "Low":
+        base_weights = [0.2, 0.2, 0.5, 0.1]
+    elif risk_level == "Medium":
+        base_weights = [0.3, 0.3, 0.3, 0.1]
     else:
-        base = [0.3, 0.3, 0.1, 0.3]
+        base_weights = [0.3, 0.3, 0.1, 0.3]
 
-    w = [b * (1 + m/100) for b, m in zip(base, mom)]
-    w = [x / sum(w) for x in w]
-    dollars = [wi * capital for wi in w]
+    rel_momentum = momentum / momentum.sum()
+    tilted_weights = [w * (1 + r / 100) for w, r in zip(base_weights, rel_momentum)]
+    total = sum(tilted_weights)
+    allocation_percent = [w / total * 100 for w in tilted_weights]
+    allocation_dollars = [p / 100 * initial_capital for p in allocation_percent]
 
-    st.header("Allocation")
-    alloc = pd.DataFrame({"Ticker": tickers, "%": [round(wi*100, 1) for wi in w], "$": [round(d, 2) for d in dollars]})
-    st.table(alloc)
+    st.header("Recommended Portfolio Allocation")
+    allocation_df = pd.DataFrame({
+        'Ticker': tickers,
+        'Allocation (%)': [round(p, 4) for p in allocation_percent],
+        'Estimated Value ($)': [round(d, 2) for d in allocation_dollars]
+    })
+    st.table(allocation_df)
 
-    fig, ax = plt.subplots()
-    ax.pie([wi*100 for wi in w], labels=tickers, autopct="%1.1f%%")
-    st.pyplot(fig)
+    fig_pie, ax_pie = plt.subplots()
+    ax_pie.pie(allocation_percent, labels=tickers, autopct='%1.1f%%', startangle=90)
+    ax_pie.axis('equal')
+    st.pyplot(fig_pie)
 
-    h1y = yf.download(tickers + ['SPY'], period="1y")['Close']
-    norm = (h1y / h1y.iloc[0]) * 100
+    start_date_1y = end_date - timedelta(days=365)
+    hist_data = yf.download(tickers + [benchmark_ticker], start=start_date_1y, end=end_date)['Close']
+    normalized = (hist_data / hist_data.iloc[0]) * 100
+    one_year_returns = ((hist_data.iloc[-1] / hist_data.iloc[0]) - 1) * 100
 
-    st.header("1-Year Trends (Normalized)")
-    fig, ax = plt.subplots(figsize=(10,5))
-    for t in tickers:
-        ax.plot(norm.index, norm[t], label=t)
-    ax.plot(norm.index, norm['SPY'], '--k', label="S&P 500")
-    ax.legend()
-    st.pyplot(fig)
+    portfolio_return = sum(r * (w / 100) for r, w in zip(one_year_returns[tickers], allocation_percent))
+    benchmark_return = one_year_returns[benchmark_ticker]
 
-    ret1y = (h1y.iloc[-1] / h1y.iloc[0] - 1) * 100
-    port_ret = sum(wi * ret1y[t] for wi, t in zip(w, tickers))
+    st.header("1-Year Historical Price Trends (Normalized to 100)")
+    fig_hist, ax_hist = plt.subplots(figsize=(10, 6))
+    for ticker in tickers:
+        ax_hist.plot(normalized.index, normalized[ticker], label=ticker)
+    ax_hist.plot(normalized.index, normalized[benchmark_ticker], label='S&P 500 (Benchmark)', linestyle='--', color='black')
+    ax_hist.set_xlabel("Date")
+    ax_hist.set_ylabel("Normalized Price")
+    ax_hist.legend()
+    st.pyplot(fig_hist)
 
-    st.header("1-Year Returns")
-    st.table(pd.DataFrame({"": ["Portfolio", "S&P 500"], "Return %": [round(port_ret, 2), round(ret1y['SPY'], 2)]}))
+    st.header("Benchmark Comparison (1-Year Return %)")
+    benchmark_df = pd.DataFrame({
+        'Metric': ['Portfolio Return', 'S&P 500 Return'],
+        'Value (%)': [round(portfolio_return, 4), round(benchmark_return, 4)]
+    })
+    st.table(benchmark_df)
 
-    if esg:
-        st.info("ESG ETFs enabled")
-    st.warning("Simulation only. Not financial advice.")
-    st.caption("yfinance data")
+    if esg_note:
+        st.info(esg_note)
+    st.warning("Data is delayed and for informational purposes only. Forecasts are model-based estimates and not guarantees. This is not financial advice. Consult a professional advisor.")
+    st.caption("Powered by yfinance API.")
