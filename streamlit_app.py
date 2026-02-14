@@ -153,3 +153,5 @@ if run_simulation:
 
 # End of script
 # Debug: ARIMA forecast sync - 2026-02-14
+
+# ARIMA forecast deployed - force sync 2026-02-14
