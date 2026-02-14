@@ -144,3 +144,4 @@ if run_simulation:
     st.caption("Powered by yfinance API.")
 
 # End of script
+# Rebuild trigger - 2026-02-14
