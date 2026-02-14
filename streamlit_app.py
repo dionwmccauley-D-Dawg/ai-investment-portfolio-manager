@@ -6,6 +6,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from statsmodels.tsa.arima.model import ARIMA
 import warnings
+
 warnings.filterwarnings("ignore")  # Suppress ARIMA convergence warnings
 
 # Title
@@ -27,30 +28,6 @@ else:
 
 # Benchmark ticker
 benchmark_ticker = 'SPY'
-
-# Risk constraints function (prep for future optimization)
-def get_risk_constraints(risk_level):
-    if risk_level == "Low":
-        return 0.10
-    elif risk_level == "Medium":
-        return 0.15
-    else:
-        return 0.20
-
-# Simple ARIMA forecast function for expected annualized return
-def forecast_expected_return(price_series, forecast_days=30):
-    try:
-        returns = price_series.pct_change().dropna()
-        if len(returns) < 60:  # Need reasonable history
-            return np.nan
-        model = ARIMA(returns[-252:], order=(5,1,0))  # ARIMA(5,1,0) - common starting point
-        model_fit = model.fit()
-        forecast = model_fit.forecast(steps=forecast_days)
-        mean_daily = forecast.mean()
-        annualized = (1 + mean_daily) ** 252 - 1  # Annualize assuming 252 trading days
-        return annualized
-    except Exception:
-        return np.nan
 
 # Run simulation button
 run_simulation = st.sidebar.button("Run Simulation")
@@ -74,6 +51,21 @@ if run_simulation:
     start_date_long = end_date - timedelta(days=5*365 + 100)  # ~5 years + buffer
     hist_data_long = yf.download(tickers, start=start_date_long, end=end_date)['Close']
 
+    # Simple ARIMA forecast function
+    def forecast_expected_return(price_series, forecast_days=30):
+        try:
+            returns = price_series.pct_change().dropna()
+            if len(returns) < 60:
+                return np.nan
+            model = ARIMA(returns[-252:], order=(5,1,0))
+            model_fit = model.fit()
+            forecast = model_fit.forecast(steps=forecast_days)
+            mean_daily = forecast.mean()
+            annualized = (1 + mean_daily) ** 252 - 1
+            return annualized
+        except Exception:
+            return np.nan
+
     # Forecast expected returns
     st.header("Forecasted Annualized Expected Returns (Next ~1 Month Horizon)")
     expected_returns = {}
@@ -95,7 +87,7 @@ if run_simulation:
     else:
         base_weights = [0.3, 0.3, 0.1, 0.3]
 
-    # Simple momentum tilt (placeholder - to be replaced with optimization)
+    # Simple momentum tilt (placeholder)
     rel_momentum = momentum / momentum.sum()
     tilted_weights = [w * (1 + r / 100) for w, r in zip(base_weights, rel_momentum)]
     total = sum(tilted_weights)
