@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime, timedelta
 from statsmodels.tsa.arima.model import ARIMA
+from scipy.optimize import minimize
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -25,6 +26,11 @@ else:
 
 benchmark_ticker = 'SPY'
 
+risk_free_rate = 0.02  # 2% risk-free rate
+
+def get_max_vol(risk_level):
+    return {"Low": 0.10, "Medium": 0.15, "High": 0.20}[risk_level]
+
 def forecast_expected_return(price_series, forecast_days=30):
     try:
         returns = price_series.pct_change().dropna()
@@ -38,6 +44,11 @@ def forecast_expected_return(price_series, forecast_days=30):
         return annualized
     except Exception:
         return np.nan
+
+def neg_sharpe(weights, exp_returns, cov_matrix):
+    port_ret = np.dot(weights, exp_returns)
+    port_vol = np.sqrt(np.dot(weights.T, np.dot(cov_matrix, weights)))
+    return - (port_ret - risk_free_rate) / port_vol
 
 if st.sidebar.button("Run Simulation"):
     st.header("Current Market Prices")
@@ -55,51 +66,58 @@ if st.sidebar.button("Run Simulation"):
     end_date = datetime.now()
     start_date_long = end_date - timedelta(days=5*365 + 100)
     hist_data_long = yf.download(tickers, start=start_date_long, end=end_date)['Close']
+    returns_long = hist_data_long.pct_change().dropna()
+    cov_matrix = returns_long.cov() * 252
 
     st.header("Forecasted Annualized Expected Returns (Next ~1 Month Horizon)")
-    expected_returns = {}
-    for ticker in tickers:
-        expected_returns[ticker] = forecast_expected_return(hist_data_long[ticker])
+    expected_returns = pd.Series({t: forecast_expected_return(hist_data_long[t]) for t in tickers})
 
     forecast_df = pd.DataFrame({
         'Ticker': tickers,
-        'Forecasted Expected Return (%)': [f"{r*100:.2f}" if not np.isnan(r) else "N/A" for r in expected_returns.values()]
+        'Forecasted Expected Return (%)': [f"{r*100:.2f}" if not np.isnan(r) else "N/A" for r in expected_returns]
     })
     st.table(forecast_df)
     st.caption("Forecasts based on ARIMA time-series model using historical daily returns. These are estimates only; actual returns may vary significantly. Past performance is not indicative of future results.")
 
-    if risk_level == "Low":
-        base_weights = [0.2, 0.2, 0.5, 0.1]
-    elif risk_level == "Medium":
-        base_weights = [0.3, 0.3, 0.3, 0.1]
+    # Optimization
+    max_vol = get_max_vol(risk_level)
+    constraints = [
+        {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
+        {'type': 'ineq', 'fun': lambda w: max_vol - np.sqrt(np.dot(w.T, np.dot(cov_matrix, w)))}
+    ]
+    bounds = tuple((0, 1) for _ in tickers)
+    init_guess = np.array([1./len(tickers)] * len(tickers))
+
+    result = minimize(neg_sharpe, init_guess, args=(expected_returns.fillna(0), cov_matrix),
+                      method='SLSQP', bounds=bounds, constraints=constraints)
+
+    if result.success:
+        weights = result.x
     else:
-        base_weights = [0.3, 0.3, 0.1, 0.3]
+        st.warning("Optimization did not converge — using equal weights.")
+        weights = init_guess
 
-    rel_momentum = momentum / momentum.sum()
-    tilted_weights = [w * (1 + r / 100) for w, r in zip(base_weights, rel_momentum)]
-    total = sum(tilted_weights)
-    allocation_percent = [w / total * 100 for w in tilted_weights]
-    allocation_dollars = [p / 100 * initial_capital for p in allocation_percent]
+    alloc_pct = weights * 100
+    alloc_val = weights * initial_capital
 
-    st.header("Recommended Portfolio Allocation")
-    allocation_df = pd.DataFrame({
+    st.header("Optimized Portfolio Allocation (Max Sharpe Ratio)")
+    alloc_df = pd.DataFrame({
         'Ticker': tickers,
-        'Allocation (%)': [round(p, 4) for p in allocation_percent],
-        'Estimated Value ($)': [round(d, 2) for d in allocation_dollars]
+        'Allocation (%)': alloc_pct.round(1),
+        'Estimated Value ($)': alloc_val.round(2)
     })
-    st.table(allocation_df)
+    st.table(alloc_df)
 
-    fig_pie, ax_pie = plt.subplots()
-    ax_pie.pie(allocation_percent, labels=tickers, autopct='%1.1f%%', startangle=90)
-    ax_pie.axis('equal')
-    st.pyplot(fig_pie)
+    fig, ax = plt.subplots()
+    ax.pie(alloc_pct, labels=tickers, autopct='%1.1f%%')
+    st.pyplot(fig)
 
     start_date_1y = end_date - timedelta(days=365)
     hist_data = yf.download(tickers + [benchmark_ticker], start=start_date_1y, end=end_date)['Close']
     normalized = (hist_data / hist_data.iloc[0]) * 100
     one_year_returns = ((hist_data.iloc[-1] / hist_data.iloc[0]) - 1) * 100
 
-    portfolio_return = sum(r * (w / 100) for r, w in zip(one_year_returns[tickers], allocation_percent))
+    portfolio_return = np.dot(weights, one_year_returns[tickers])
     benchmark_return = one_year_returns[benchmark_ticker]
 
     st.header("1-Year Historical Price Trends (Normalized to 100)")
@@ -118,6 +136,7 @@ if st.sidebar.button("Run Simulation"):
         'Value (%)': [round(portfolio_return, 4), round(benchmark_return, 4)]
     })
     st.table(benchmark_df)
+
     if esg_note:
         st.info(esg_note)
     st.warning("Data is delayed and for informational purposes only. Forecasts are model-based estimates and not guarantees. This is not financial advice. Consult a professional advisor.")
