@@ -118,7 +118,6 @@ if st.sidebar.button("Run Simulation"):
         'Value (%)': [round(portfolio_return, 4), round(benchmark_return, 4)]
     })
     st.table(benchmark_df)
-
     if esg_note:
         st.info(esg_note)
     st.warning("Data is delayed and for informational purposes only. Forecasts are model-based estimates and not guarantees. This is not financial advice. Consult a professional advisor.")
