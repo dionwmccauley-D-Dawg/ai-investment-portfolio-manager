@@ -128,7 +128,7 @@ if st.button("Run Simulation"):
 
         st.caption("Note: Prices are delayed (Yahoo Finance data) and not real-time. For real-time data, consider premium sources. This is for illustrative purposes only.")
 
-        # Benchmark comparison metrics (1-year total return)
+        # Benchmark comparison metrics (1-year total return) – fixed formatting
         st.subheader("Benchmark Comparison (1-Year Total Return)")
         benchmark_return = 0.0
         alloc_return = 0.0
@@ -136,16 +136,16 @@ if st.button("Run Simulation"):
         try:
             spy_hist = yf.download("SPY", period="1y")['Close']
             if not spy_hist.empty and len(spy_hist) > 1:
-                benchmark_return = (spy_hist.iloc[-1] - spy_hist.iloc[0]) / spy_hist.iloc[0] * 100
+                benchmark_return = float((spy_hist.iloc[-1] - spy_hist.iloc[0]) / spy_hist.iloc[0] * 100)
         except Exception as e:
             st.warning(f"Could not calculate S&P 500 return: {str(e)}")
 
-        # Approximate allocation return using momentum as proxy
+        # Approximate allocation return using weighted momentum
         weighted_return = 0.0
         total_weight = 0.0
         for asset, pct in alloc.items():
             if asset in momentum_scores:
-                weighted_return += pct / 100 * momentum_scores[asset]
+                weighted_return += (pct / 100) * momentum_scores[asset]
                 total_weight += pct / 100
 
         if total_weight > 0:
@@ -159,9 +159,10 @@ if st.button("Run Simulation"):
 
         st.dataframe(comparison_df, use_container_width=True)
 
-        st.info(
-            "1-Year return for the suggested allocation is an approximation based on recent momentum and current prices. "
-            "Past performance is no guarantee of future results. This is not investment advice — consult a certified financial advisor."
+        st.caption(
+            "Allocation return is approximated from recent momentum and current prices. "
+            "Actual returns vary. Past performance is no guarantee of future results. "
+            "This is not investment advice — consult a certified financial advisor."
         )
 
         st.info(
