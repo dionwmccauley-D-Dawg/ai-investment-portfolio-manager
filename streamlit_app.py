@@ -145,3 +145,4 @@ if run_simulation:
 
 # End of script
 # Rebuild trigger - 2026-02-14
+# ARIMA forecast table deployed live - 2026-02-14
