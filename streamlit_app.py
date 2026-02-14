@@ -31,7 +31,7 @@ if st.button("Run Simulation"):
 
     # Dynamic tickers based on ESG preference
     if prefer_esg:
-        tickers = ["ESGU", "SUSL", "BND", "QQQ"]  # ESG US stocks, ESG S&P 500, bonds, growth
+        tickers = ["ESGU", "SUSL", "BND", "QQQ"]
         st.info("ESG preference enabled: using ESGU and SUSL for equity exposure.")
     else:
         tickers = ["SPY", "VTI", "BND", "QQQ"]
@@ -72,7 +72,6 @@ if st.button("Run Simulation"):
         alloc = base_allocs[risk_level].copy()
 
         if prefer_esg:
-            # Replace SPY with ESGU, VTI with SUSL where applicable
             if "SPY" in alloc:
                 alloc["ESGU"] = alloc.pop("SPY")
             if "VTI" in alloc:
@@ -183,7 +182,6 @@ if st.button("Run Simulation"):
             "This is not investment advice — consult a certified financial advisor."
         )
 
-        # New: ESG note when toggle is active
         if prefer_esg:
             st.info(
                 "ESG tickers (ESGU, SUSL) prioritize environmental, social, and governance factors but may have different risk/return profiles compared to traditional ETFs."
