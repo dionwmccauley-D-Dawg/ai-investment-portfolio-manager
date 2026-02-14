@@ -1,0 +1,6 @@
+.venv/
+*.backup.*
+*backup.txt
+*backup.py
+__pycache__/
+*.pyc
