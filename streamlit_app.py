@@ -128,7 +128,7 @@ if st.button("Run Simulation"):
 
         st.caption("Note: Prices are delayed (Yahoo Finance data) and not real-time. For real-time data, consider premium sources. This is for illustrative purposes only.")
 
-        # New: Benchmark comparison metrics (1-year total return)
+        # Benchmark comparison metrics (1-year total return)
         st.subheader("Benchmark Comparison (1-Year Total Return)")
         benchmark_return = 0.0
         alloc_return = 0.0
