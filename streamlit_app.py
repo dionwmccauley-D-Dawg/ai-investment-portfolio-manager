@@ -156,3 +156,5 @@ if run_simulation:
 
 # ARIMA forecast deployed - force sync 2026-02-14
 # Phase 2 forecast table - confirmed sync 2026-02-14
+
+# ARIMA FORECAST TABLE IS NOW LIVE - SYNC CONFIRM 2026-02-14
