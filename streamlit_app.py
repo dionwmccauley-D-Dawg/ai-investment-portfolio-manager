@@ -2,7 +2,7 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
-from datetime import datetime, timedelta
+from datetime import datetime
 
 st.title("AI Investment Portfolio Manager")
 
@@ -126,49 +126,15 @@ if st.button("Run Simulation"):
             "It helps visualize trends and volatility to inform the momentum tilt in your allocation suggestion."
         )
 
-        # New: Benchmark comparison metrics (1-year total return)
-        st.subheader("Benchmark Comparison (1-Year Total Return)")
-        benchmark_return = 0.0
-        alloc_return = 0.0
-
-        try:
-            spy_hist = yf.download("SPY", period="1y")['Close']
-            if not spy_hist.empty and len(spy_hist) > 1:
-                benchmark_return = (spy_hist.iloc[-1] - spy_hist.iloc[0]) / spy_hist.iloc[0] * 100
-        except Exception as e:
-            st.warning(f"Could not calculate S&P 500 return: {str(e)}")
-
-        # Weighted allocation return (using current prices and weights)
-        current_prices = {row['Ticker']: float(row['Last Price'].strip('$')) for _, row in df.iterrows()}
-        weighted_return = 0.0
-        total_weight = 0.0
-        for asset, pct in alloc.items():
-            if asset in current_prices:
-                # Approximate 1-year return using current price and momentum (simplified)
-                # This is placeholder — real backtest would use full history
-                weighted_return += pct / 100 * momentum_scores.get(asset, 0)
-                total_weight += pct / 100
-
-        if total_weight > 0:
-            alloc_return = weighted_return / total_weight
-
-        comparison_df = pd.DataFrame({
-            "Metric": ["Suggested Allocation", "S&P 500 Benchmark"],
-            "1-Year Return (%)": [f"{alloc_return:.1f}% (approx)", f"{benchmark_return:.1f}%"],
-            "Difference": [f"{alloc_return - benchmark_return:.1f}%", "-"]
-        })
-
-        st.dataframe(comparison_df, use_container_width=True)
-
-        st.info(
-            "1-Year return for the suggested allocation is an approximation based on momentum and current prices. "
-            "Past performance is no guarantee of future results. This is not investment advice — consult a certified financial advisor."
-        )
+        # New: Caption note about delayed prices
+        st.caption("Note: Prices are delayed (Yahoo Finance data) and not real-time. For real-time data, consider premium sources. This is for illustrative purposes only.")
 
         st.info(
             "This allocation includes a simple momentum tilt (favoring recent performers). "
+            "It is a starting suggestion only, not financial advice. "
             "Future versions will use modern portfolio theory for optimal risk-adjusted returns, "
-            "diversification, and ethical considerations like ESG factors."
+            "diversification, and ethical considerations like ESG factors. "
+            "Always consult a certified financial advisor."
         )
     else:
         st.error("No market data fetched. Check internet connection.")
