@@ -152,3 +152,4 @@ if run_simulation:
     st.caption("Powered by yfinance API.")
 
 # End of script
+# Debug: ARIMA forecast sync - 2026-02-14
