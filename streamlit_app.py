@@ -63,7 +63,6 @@ if st.button("Run Simulation"):
         st.subheader("Latest Market Prices (Yahoo Finance)")
         st.dataframe(df, use_container_width=True)
 
-        # Base allocations (adjusted for ESG if toggled)
         base_allocs = {
             "Low": {"BND": 60, "SPY": 25, "VTI": 15, "QQQ": 0},
             "Medium": {"SPY": 35, "VTI": 30, "BND": 20, "QQQ": 15},
@@ -184,10 +183,18 @@ if st.button("Run Simulation"):
             "This is not investment advice — consult a certified financial advisor."
         )
 
+        # New: ESG note when toggle is active
+        if prefer_esg:
+            st.info(
+                "ESG tickers (ESGU, SUSL) prioritize environmental, social, and governance factors but may have different risk/return profiles compared to traditional ETFs."
+            )
+
         st.info(
             "This allocation includes a simple momentum tilt (favoring recent performers). "
+            "It is a starting suggestion only, not financial advice. "
             "Future versions will use modern portfolio theory for optimal risk-adjusted returns, "
-            "diversification, and ethical considerations like ESG factors."
+            "diversification, and ethical considerations like ESG factors. "
+            "Always consult a certified financial advisor."
         )
     else:
         st.error("No market data fetched. Check internet connection.")
