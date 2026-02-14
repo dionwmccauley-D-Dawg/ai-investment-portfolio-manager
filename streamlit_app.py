@@ -25,8 +25,7 @@ else:
     esg_note = ""
 
 benchmark_ticker = 'SPY'
-
-risk_free_rate = 0.02  # 2% risk-free rate
+risk_free_rate = 0.02
 
 def get_max_vol(risk_level):
     return {"Low": 0.10, "Medium": 0.15, "High": 0.20}[risk_level]
@@ -79,7 +78,6 @@ if st.sidebar.button("Run Simulation"):
     st.table(forecast_df)
     st.caption("Forecasts based on ARIMA time-series model using historical daily returns. These are estimates only; actual returns may vary significantly. Past performance is not indicative of future results.")
 
-    # Optimization
     max_vol = get_max_vol(risk_level)
     constraints = [
         {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
