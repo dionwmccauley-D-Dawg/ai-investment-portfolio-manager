@@ -190,14 +190,64 @@ if run_backtest:
     ax.legend()
     st.pyplot(fig)
 
+    # Backtest metrics with added Sharpe, max drawdown, Calmar, ROI
+    strategy_ret_series = pd.Series(strategy_returns, index=rebalance_dates[1:])
+    benchmark_ret_series = benchmark_returns.loc[rebalance_dates[0]:]
+
     ann_ret_strategy = (strategy_cum[-1] ** (252 / len(strategy_returns)) - 1) * 100 if len(strategy_returns) > 0 else 0
     ann_ret_bench = (benchmark_cum[-1] ** (252 / len(benchmark_returns)) - 1) * 100 if len(benchmark_returns) > 0 else 0
 
+    ann_vol_strategy = np.std(strategy_returns) * np.sqrt(252) * 100 if strategy_returns else 0
+    ann_vol_bench = np.std(benchmark_returns) * np.sqrt(252) * 100
+
+    sharpe_strategy = (ann_ret_strategy / 100 - risk_free_rate) / (ann_vol_strategy / 100) if ann_vol_strategy > 0 else 0
+    sharpe_bench = (ann_ret_bench / 100 - risk_free_rate) / (ann_vol_bench / 100) if ann_vol_bench > 0 else 0
+
+    # Max drawdown
+    strategy_cum_series = pd.Series(strategy_cum, index=rebalance_dates[1:])
+    strategy_peak = strategy_cum_series.cummax()
+    strategy_drawdown = (strategy_cum_series - strategy_peak) / strategy_peak
+    max_dd_strategy = strategy_drawdown.min() * 100
+
+    benchmark_cum_series = pd.Series(benchmark_cum, index=benchmark_ret_series.index)
+    benchmark_peak = benchmark_cum_series.cummax()
+    benchmark_drawdown = (benchmark_cum_series - benchmark_peak) / benchmark_peak
+    max_dd_bench = benchmark_drawdown.min() * 100
+
+    # Calmar ratio
+    calmar_strategy = ann_ret_strategy / -max_dd_strategy if max_dd_strategy != 0 else 0
+    calmar_bench = ann_ret_bench / -max_dd_bench if max_dd_bench != 0 else 0
+
+    # ROI (total return)
+    roi_strategy = (strategy_cum[-1] - 1) * 100
+    roi_bench = (benchmark_cum[-1] - 1) * 100
+
     st.subheader("Backtest Metrics")
     metrics_df = pd.DataFrame({
-        'Metric': ['Annualized Return (%)', 'Annualized Volatility (%)'],
-        'Strategy': [round(ann_ret_strategy, 2), round(np.std(strategy_returns) * np.sqrt(252) * 100, 2) if strategy_returns else 0],
-        'S&P 500': [round(ann_ret_bench, 2), round(np.std(benchmark_returns) * np.sqrt(252) * 100, 2)]
+        'Metric': [
+            'Annualized Return (%)',
+            'Annualized Volatility (%)',
+            'Sharpe Ratio',
+            'Max Drawdown (%)',
+            'Calmar Ratio',
+            'ROI (Total Return %)'
+        ],
+        'Strategy': [
+            round(ann_ret_strategy, 2),
+            round(ann_vol_strategy, 2),
+            round(sharpe_strategy, 2),
+            round(max_dd_strategy, 2),
+            round(calmar_strategy, 2),
+            round(roi_strategy, 2)
+        ],
+        'S&P 500': [
+            round(ann_ret_bench, 2),
+            round(ann_vol_bench, 2),
+            round(sharpe_bench, 2),
+            round(max_dd_bench, 2),
+            round(calmar_bench, 2),
+            round(roi_bench, 2)
+        ]
     })
     st.table(metrics_df)
 
