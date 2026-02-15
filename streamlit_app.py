@@ -18,6 +18,11 @@ risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
 esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
 run_backtest = st.sidebar.checkbox("Run Backtest (5 years)", value=False)
 
+# Rebalancing inputs (always visible, but only used if backtest or simulation needs it)
+rebalance_mode = st.sidebar.selectbox("Rebalance Mode", ["None (Buy & Hold)", "Time-based", "Threshold-based", "Hybrid"])
+rebalance_freq = st.sidebar.selectbox("Rebalance Frequency (Time-based/Hybrid)", ["Monthly", "Quarterly", "Annually"], index=1)
+rebalance_threshold = st.sidebar.slider("Rebalance Threshold (%) (Threshold-based/Hybrid)", 1, 15, 5)
+
 if esg_preference:
     tickers = ['ESGU', 'SUSL', 'BND', 'QQQ']
     esg_note = "Using ESG-focused ETFs: ESGU (Broad US ESG), SUSL (US Large Cap ESG), BND (Bonds), QQQ (Tech/Growth)."
@@ -261,37 +266,5 @@ if run_backtest:
         ]
     })
     st.table(metrics_df)
-
-    # Rolling metrics
-    strategy_daily_ret = backtest_returns[tickers].dot(weights).rolling(30).mean() * 252
-    benchmark_daily_ret = benchmark_returns.rolling(30).mean() * 252
-
-    strategy_rolling_vol = backtest_returns[tickers].dot(weights).rolling(30).std() * np.sqrt(252) * 100
-    benchmark_rolling_vol = benchmark_returns.rolling(30).std() * np.sqrt(252) * 100
-
-    strategy_rolling_sharpe = (strategy_daily_ret - risk_free_rate) / (strategy_rolling_vol / 100)
-    benchmark_rolling_sharpe = (benchmark_daily_ret - risk_free_rate) / (benchmark_rolling_vol / 100)
-
-    st.subheader("Rolling Annualized Volatility (30-day)")
-    fig_vol, ax_vol = plt.subplots(figsize=(10, 6))
-    ax_vol.plot(strategy_rolling_vol.index, strategy_rolling_vol, label="Strategy")
-    ax_vol.plot(benchmark_rolling_vol.index, benchmark_rolling_vol, label="S&P 500")
-    ax_vol.legend()
-    st.pyplot(fig_vol)
-
-    st.subheader("Rolling Sharpe Ratio (30-day)")
-    fig_sharpe, ax_sharpe = plt.subplots(figsize=(10, 6))
-    ax_sharpe.plot(strategy_rolling_sharpe.index, strategy_rolling_sharpe, label="Strategy")
-    ax_sharpe.plot(benchmark_rolling_sharpe.index, benchmark_rolling_sharpe, label="S&P 500")
-    ax_sharpe.legend()
-    st.pyplot(fig_sharpe)
-
-    st.subheader("Rolling Drawdown Curve")
-    fig_dd, ax_dd = plt.subplots(figsize=(10, 6))
-    ax_dd.plot(strategy_drawdown.index, strategy_drawdown * 100, label="Strategy")
-    ax_dd.plot(benchmark_drawdown.index, benchmark_drawdown * 100, label="S&P 500")
-    ax_dd.set_ylabel("Drawdown (%)")
-    ax_dd.legend()
-    st.pyplot(fig_dd)
 
     st.warning("Backtest is illustrative. Assumes quarterly rebalancing (or threshold trigger), no transaction costs, no slippage. Past performance is not indicative of future results.")
