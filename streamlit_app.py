@@ -168,13 +168,13 @@ if run_backtest:
         train_data = backtest_data.loc[:start]
         train_returns = train_data.pct_change().dropna()
 
-        # Slice to portfolio tickers only
+        # Slice to portfolio tickers only (exclude benchmark)
         train_returns_port = train_returns[tickers]
         cov = train_returns_port.cov() * 252
 
         exp_ret = pd.Series({t: forecast_expected_return(train_data[t]) for t in tickers})
 
-        weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))  # Medium for backtest
+        weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))  # Medium for backtest balance
 
         period_ret = backtest_returns.loc[start:end][tickers]
         strategy_ret = np.dot(period_ret.mean(), weights)
