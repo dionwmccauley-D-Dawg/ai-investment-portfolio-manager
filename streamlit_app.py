@@ -16,12 +16,10 @@ st.sidebar.header("User Inputs")
 initial_capital = st.sidebar.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
 risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
 esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
-run_backtest = st.sidebar.checkbox("Run Backtest (5 years)", value=False)
-
-# Rebalancing inputs (always visible, but only used if backtest or simulation needs it)
 rebalance_mode = st.sidebar.selectbox("Rebalance Mode", ["None (Buy & Hold)", "Time-based", "Threshold-based", "Hybrid"])
 rebalance_freq = st.sidebar.selectbox("Rebalance Frequency (Time-based/Hybrid)", ["Monthly", "Quarterly", "Annually"], index=1)
 rebalance_threshold = st.sidebar.slider("Rebalance Threshold (%) (Threshold-based/Hybrid)", 1, 15, 5)
+run_backtest = st.sidebar.checkbox("Run Backtest (5 years)", value=False)
 
 if esg_preference:
     tickers = ['ESGU', 'SUSL', 'BND', 'QQQ']
@@ -224,19 +222,19 @@ if run_backtest:
 
     strategy_cum_series = pd.Series(strategy_cum, index=rebalance_dates[1:])
     strategy_peak = strategy_cum_series.cummax()
-    strategy_drawdown = (strategy_cum_series - strategy_peak) / strategy_peak
-    max_dd_strategy = strategy_drawdown.min() * 100
+    strategy_drawdown = (strategy_cum_series - strategy_peak) / strategy_peak * 100
+    max_dd_strategy = strategy_drawdown.min()
 
     benchmark_cum_series = pd.Series(benchmark_cum, index=benchmark_returns.index)
     benchmark_peak = benchmark_cum_series.cummax()
-    benchmark_drawdown = (benchmark_cum_series - benchmark_peak) / benchmark_peak
-    max_dd_bench = benchmark_drawdown.min() * 100
+    benchmark_drawdown = (benchmark_cum_series - benchmark_peak) / benchmark_peak * 100
+    max_dd_bench = benchmark_drawdown.min()
 
     calmar_strategy = ann_ret_strategy / -max_dd_strategy if max_dd_strategy != 0 else 0
     calmar_bench = ann_ret_bench / -max_dd_bench if max_dd_bench != 0 else 0
 
-    roi_strategy = (strategy_cum[-1] - 1) * 100
-    roi_bench = (benchmark_cum[-1] - 1) * 100
+    roi_strategy = (strategy_cum[-1] / initial_capital - 1) * 100
+    roi_bench = (benchmark_cum[-1] / initial_capital - 1) * 100
 
     st.subheader("Backtest Metrics")
     metrics_df = pd.DataFrame({
@@ -267,4 +265,4 @@ if run_backtest:
     })
     st.table(metrics_df)
 
-    st.warning("Backtest is illustrative. Assumes quarterly rebalancing (or threshold trigger), no transaction costs, no slippage. Past performance is not indicative of future results.")
+    st.warning("Backtest is illustrative. Assumes rebalancing according to selected mode, no transaction costs, no slippage. Past performance is not indicative of future results.")
