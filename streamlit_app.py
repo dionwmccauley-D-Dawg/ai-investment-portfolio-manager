@@ -86,7 +86,6 @@ if st.sidebar.button("Run Simulation"):
     bounds = tuple((0, 1) for _ in tickers)
     init_guess = np.array([1./len(tickers)] * len(tickers))
 
-    # Fill NaN forecasts with 0 to avoid optimizer crash
     exp_ret_clean = expected_returns.fillna(0).values
 
     result = minimize(neg_sharpe, init_guess, args=(exp_ret_clean, cov_matrix),
@@ -98,7 +97,6 @@ if st.sidebar.button("Run Simulation"):
         st.warning("Optimization did not converge or produced invalid weights — using equal weights.")
         weights = init_guess
 
-    # Safety: replace any NaN weights with 0 and renormalize
     weights = np.nan_to_num(weights, nan=0.0)
     weights = weights / np.sum(weights) if np.sum(weights) > 0 else init_guess
 
