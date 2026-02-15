@@ -152,7 +152,7 @@ if st.sidebar.button("Run Simulation"):
 # Backtesting section
 if run_backtest:
     st.header("Backtest (5-Year Historical Simulation)")
-    backtest_start = datetime.now() - timedelta(days=5*365)
+    backtest_start = datetime.now() - timedelta(days=5*365 + 100)  # Buffer for ARIMA
     backtest_data = yf.download(tickers + [benchmark_ticker], start=backtest_start)['Close']
     backtest_returns = backtest_data.pct_change().dropna()
 
@@ -165,18 +165,17 @@ if run_backtest:
         start = rebalance_dates[i]
         end = rebalance_dates[i+1]
 
-        # Data up to rebalance date
         train_data = backtest_data.loc[:start]
         train_returns = train_data.pct_change().dropna()
-        cov = train_returns.cov() * 252
 
-        # Forecast at rebalance date
+        # Slice to portfolio tickers only
+        train_returns_port = train_returns[tickers]
+        cov = train_returns_port.cov() * 252
+
         exp_ret = pd.Series({t: forecast_expected_return(train_data[t]) for t in tickers})
 
-        # Optimize
-        weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))  # Use medium for backtest stability
+        weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))  # Medium for backtest
 
-        # Period returns
         period_ret = backtest_returns.loc[start:end][tickers]
         strategy_ret = np.dot(period_ret.mean(), weights)
         strategy_returns.append(strategy_ret)
@@ -191,14 +190,13 @@ if run_backtest:
     ax.legend()
     st.pyplot(fig)
 
-    # Metrics
-    ann_ret_strategy = (strategy_cum[-1] ** (252 / len(strategy_returns)) - 1) * 100
-    ann_ret_bench = (benchmark_cum[-1] ** (252 / len(benchmark_returns)) - 1) * 100
+    ann_ret_strategy = (strategy_cum[-1] ** (252 / len(strategy_returns)) - 1) * 100 if len(strategy_returns) > 0 else 0
+    ann_ret_bench = (benchmark_cum[-1] ** (252 / len(benchmark_returns)) - 1) * 100 if len(benchmark_returns) > 0 else 0
 
     st.subheader("Backtest Metrics")
     metrics_df = pd.DataFrame({
         'Metric': ['Annualized Return (%)', 'Annualized Volatility (%)'],
-        'Strategy': [round(ann_ret_strategy, 2), round(np.std(strategy_returns) * np.sqrt(252) * 100, 2)],
+        'Strategy': [round(ann_ret_strategy, 2), round(np.std(strategy_returns) * np.sqrt(252) * 100, 2) if strategy_returns else 0],
         'S&P 500': [round(ann_ret_bench, 2), round(np.std(benchmark_returns) * np.sqrt(252) * 100, 2)]
     })
     st.table(metrics_df)
