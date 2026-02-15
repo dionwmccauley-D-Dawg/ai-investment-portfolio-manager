@@ -86,14 +86,21 @@ if st.sidebar.button("Run Simulation"):
     bounds = tuple((0, 1) for _ in tickers)
     init_guess = np.array([1./len(tickers)] * len(tickers))
 
-    result = minimize(neg_sharpe, init_guess, args=(expected_returns.fillna(0), cov_matrix),
+    # Fill NaN forecasts with 0 to avoid optimizer crash
+    exp_ret_clean = expected_returns.fillna(0).values
+
+    result = minimize(neg_sharpe, init_guess, args=(exp_ret_clean, cov_matrix),
                       method='SLSQP', bounds=bounds, constraints=constraints)
 
-    if result.success:
+    if result.success and not np.any(np.isnan(result.x)):
         weights = result.x
     else:
-        st.warning("Optimization did not converge — using equal weights.")
+        st.warning("Optimization did not converge or produced invalid weights — using equal weights.")
         weights = init_guess
+
+    # Safety: replace any NaN weights with 0 and renormalize
+    weights = np.nan_to_num(weights, nan=0.0)
+    weights = weights / np.sum(weights) if np.sum(weights) > 0 else init_guess
 
     alloc_pct = weights * 100
     alloc_val = weights * initial_capital
