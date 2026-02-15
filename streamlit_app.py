@@ -16,9 +16,6 @@ st.sidebar.header("User Inputs")
 initial_capital = st.sidebar.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
 risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
 esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
-rebalance_mode = st.sidebar.selectbox("Rebalance Mode", ["None (Buy & Hold)", "Time-based", "Threshold-based", "Hybrid"])
-rebalance_freq = st.sidebar.selectbox("Rebalance Frequency (Time-based/Hybrid)", ["Monthly", "Quarterly", "Annually"], index=1)
-rebalance_threshold = st.sidebar.slider("Rebalance Threshold (%) (Threshold-based/Hybrid)", 1, 15, 5)
 run_backtest = st.sidebar.checkbox("Run Backtest (5 years)", value=False)
 
 if esg_preference:
@@ -164,7 +161,7 @@ if run_backtest:
 
     rebalance_dates = pd.date_range(start=backtest_start, end=datetime.now(), freq='3M')
 
-    target_weights = None  # Will be set at first rebalance
+    target_weights = None
 
     for i in range(len(rebalance_dates)-1):
         start = rebalance_dates[i]
@@ -173,24 +170,21 @@ if run_backtest:
         train_data = backtest_data.loc[:start]
         train_returns = train_data.pct_change().dropna()
 
-        # Slice to portfolio tickers only
         train_returns_port = train_returns[tickers]
         cov = train_returns_port.cov() * 252
 
         exp_ret = pd.Series({t: forecast_expected_return(train_data[t]) for t in tickers})
 
-        # Optimize at rebalance date
         current_weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))
 
         if target_weights is None:
-            target_weights = current_weights  # First target
+            target_weights = current_weights
 
-        # Check if rebalance needed (threshold mode)
         drift = np.abs(current_weights - target_weights).max()
         should_rebalance = False
 
         if rebalance_mode in ["Time-based", "Hybrid"]:
-            should_rebalance = True  # Time-based always rebalances
+            should_rebalance = True
         if rebalance_mode in ["Threshold-based", "Hybrid"]:
             if drift > (rebalance_threshold / 100):
                 should_rebalance = True
@@ -198,7 +192,7 @@ if run_backtest:
         if should_rebalance:
             target_weights = current_weights
         else:
-            current_weights = target_weights  # Keep previous target weights
+            current_weights = target_weights
 
         period_ret = backtest_returns.loc[start:end][tickers]
         strategy_ret = np.dot(period_ret.mean(), current_weights)
@@ -228,7 +222,7 @@ if run_backtest:
     strategy_drawdown = (strategy_cum_series - strategy_peak) / strategy_peak
     max_dd_strategy = strategy_drawdown.min() * 100
 
-    benchmark_cum_series = pd.Series(benchmark_cum, index=benchmark_ret_series.index)
+    benchmark_cum_series = pd.Series(benchmark_cum, index=benchmark_returns.index)
     benchmark_peak = benchmark_cum_series.cummax()
     benchmark_drawdown = (benchmark_cum_series - benchmark_peak) / benchmark_peak
     max_dd_bench = benchmark_drawdown.min() * 100
@@ -267,5 +261,37 @@ if run_backtest:
         ]
     })
     st.table(metrics_df)
+
+    # Rolling metrics
+    strategy_daily_ret = backtest_returns[tickers].dot(weights).rolling(30).mean() * 252
+    benchmark_daily_ret = benchmark_returns.rolling(30).mean() * 252
+
+    strategy_rolling_vol = backtest_returns[tickers].dot(weights).rolling(30).std() * np.sqrt(252) * 100
+    benchmark_rolling_vol = benchmark_returns.rolling(30).std() * np.sqrt(252) * 100
+
+    strategy_rolling_sharpe = (strategy_daily_ret - risk_free_rate) / (strategy_rolling_vol / 100)
+    benchmark_rolling_sharpe = (benchmark_daily_ret - risk_free_rate) / (benchmark_rolling_vol / 100)
+
+    st.subheader("Rolling Annualized Volatility (30-day)")
+    fig_vol, ax_vol = plt.subplots(figsize=(10, 6))
+    ax_vol.plot(strategy_rolling_vol.index, strategy_rolling_vol, label="Strategy")
+    ax_vol.plot(benchmark_rolling_vol.index, benchmark_rolling_vol, label="S&P 500")
+    ax_vol.legend()
+    st.pyplot(fig_vol)
+
+    st.subheader("Rolling Sharpe Ratio (30-day)")
+    fig_sharpe, ax_sharpe = plt.subplots(figsize=(10, 6))
+    ax_sharpe.plot(strategy_rolling_sharpe.index, strategy_rolling_sharpe, label="Strategy")
+    ax_sharpe.plot(benchmark_rolling_sharpe.index, benchmark_rolling_sharpe, label="S&P 500")
+    ax_sharpe.legend()
+    st.pyplot(fig_sharpe)
+
+    st.subheader("Rolling Drawdown Curve")
+    fig_dd, ax_dd = plt.subplots(figsize=(10, 6))
+    ax_dd.plot(strategy_drawdown.index, strategy_drawdown * 100, label="Strategy")
+    ax_dd.plot(benchmark_drawdown.index, benchmark_drawdown * 100, label="S&P 500")
+    ax_dd.set_ylabel("Drawdown (%)")
+    ax_dd.legend()
+    st.pyplot(fig_dd)
 
     st.warning("Backtest is illustrative. Assumes quarterly rebalancing (or threshold trigger), no transaction costs, no slippage. Past performance is not indicative of future results.")
