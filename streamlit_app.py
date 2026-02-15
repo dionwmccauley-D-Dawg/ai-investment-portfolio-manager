@@ -16,6 +16,9 @@ st.sidebar.header("User Inputs")
 initial_capital = st.sidebar.number_input("Initial Capital ($)", min_value=1000.0, value=10000.0, step=1000.0)
 risk_level = st.sidebar.selectbox("Risk Level", ["Low", "Medium", "High"])
 esg_preference = st.sidebar.checkbox("Prefer ESG Investments")
+rebalance_mode = st.sidebar.selectbox("Rebalance Mode", ["None (Buy & Hold)", "Time-based", "Threshold-based", "Hybrid"])
+rebalance_freq = st.sidebar.selectbox("Rebalance Frequency (Time-based/Hybrid)", ["Monthly", "Quarterly", "Annually"], index=1)
+rebalance_threshold = st.sidebar.slider("Rebalance Threshold (%) (Threshold-based/Hybrid)", 1, 15, 5)
 run_backtest = st.sidebar.checkbox("Run Backtest (5 years)", value=False)
 
 if esg_preference:
@@ -152,7 +155,7 @@ if st.sidebar.button("Run Simulation"):
 # Backtesting section
 if run_backtest:
     st.header("Backtest (5-Year Historical Simulation)")
-    backtest_start = datetime.now() - timedelta(days=5*365 + 100)  # Buffer for ARIMA
+    backtest_start = datetime.now() - timedelta(days=5*365 + 100)
     backtest_data = yf.download(tickers + [benchmark_ticker], start=backtest_start)['Close']
     backtest_returns = backtest_data.pct_change().dropna()
 
@@ -161,6 +164,8 @@ if run_backtest:
 
     rebalance_dates = pd.date_range(start=backtest_start, end=datetime.now(), freq='3M')
 
+    target_weights = None  # Will be set at first rebalance
+
     for i in range(len(rebalance_dates)-1):
         start = rebalance_dates[i]
         end = rebalance_dates[i+1]
@@ -168,16 +173,35 @@ if run_backtest:
         train_data = backtest_data.loc[:start]
         train_returns = train_data.pct_change().dropna()
 
-        # Slice to portfolio tickers only (exclude benchmark)
+        # Slice to portfolio tickers only
         train_returns_port = train_returns[tickers]
         cov = train_returns_port.cov() * 252
 
         exp_ret = pd.Series({t: forecast_expected_return(train_data[t]) for t in tickers})
 
-        weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))  # Medium for backtest balance
+        # Optimize at rebalance date
+        current_weights = optimize_portfolio(exp_ret, cov, get_max_vol("Medium"))
+
+        if target_weights is None:
+            target_weights = current_weights  # First target
+
+        # Check if rebalance needed (threshold mode)
+        drift = np.abs(current_weights - target_weights).max()
+        should_rebalance = False
+
+        if rebalance_mode in ["Time-based", "Hybrid"]:
+            should_rebalance = True  # Time-based always rebalances
+        if rebalance_mode in ["Threshold-based", "Hybrid"]:
+            if drift > (rebalance_threshold / 100):
+                should_rebalance = True
+
+        if should_rebalance:
+            target_weights = current_weights
+        else:
+            current_weights = target_weights  # Keep previous target weights
 
         period_ret = backtest_returns.loc[start:end][tickers]
-        strategy_ret = np.dot(period_ret.mean(), weights)
+        strategy_ret = np.dot(period_ret.mean(), current_weights)
         strategy_returns.append(strategy_ret)
 
     strategy_cum = (1 + np.array(strategy_returns)).cumprod()
@@ -190,10 +214,6 @@ if run_backtest:
     ax.legend()
     st.pyplot(fig)
 
-    # Backtest metrics with added Sharpe, max drawdown, Calmar, ROI
-    strategy_ret_series = pd.Series(strategy_returns, index=rebalance_dates[1:])
-    benchmark_ret_series = benchmark_returns.loc[rebalance_dates[0]:]
-
     ann_ret_strategy = (strategy_cum[-1] ** (252 / len(strategy_returns)) - 1) * 100 if len(strategy_returns) > 0 else 0
     ann_ret_bench = (benchmark_cum[-1] ** (252 / len(benchmark_returns)) - 1) * 100 if len(benchmark_returns) > 0 else 0
 
@@ -203,7 +223,6 @@ if run_backtest:
     sharpe_strategy = (ann_ret_strategy / 100 - risk_free_rate) / (ann_vol_strategy / 100) if ann_vol_strategy > 0 else 0
     sharpe_bench = (ann_ret_bench / 100 - risk_free_rate) / (ann_vol_bench / 100) if ann_vol_bench > 0 else 0
 
-    # Max drawdown
     strategy_cum_series = pd.Series(strategy_cum, index=rebalance_dates[1:])
     strategy_peak = strategy_cum_series.cummax()
     strategy_drawdown = (strategy_cum_series - strategy_peak) / strategy_peak
@@ -214,11 +233,9 @@ if run_backtest:
     benchmark_drawdown = (benchmark_cum_series - benchmark_peak) / benchmark_peak
     max_dd_bench = benchmark_drawdown.min() * 100
 
-    # Calmar ratio
     calmar_strategy = ann_ret_strategy / -max_dd_strategy if max_dd_strategy != 0 else 0
     calmar_bench = ann_ret_bench / -max_dd_bench if max_dd_bench != 0 else 0
 
-    # ROI (total return)
     roi_strategy = (strategy_cum[-1] - 1) * 100
     roi_bench = (benchmark_cum[-1] - 1) * 100
 
@@ -251,4 +268,4 @@ if run_backtest:
     })
     st.table(metrics_df)
 
-    st.warning("Backtest is illustrative. Assumes quarterly rebalancing, no transaction costs, no slippage. Past performance is not indicative of future results.")
+    st.warning("Backtest is illustrative. Assumes quarterly rebalancing (or threshold trigger), no transaction costs, no slippage. Past performance is not indicative of future results.")
